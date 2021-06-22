@@ -1,87 +1,102 @@
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.Scanner;
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.*;
+import java.io.*;
+import java.util.*;
 
-public class Main {
+public class Main{
 
-    private static int locations;
-    private static int cars;
-    private static int capacity;
-    private static ArrayList<Deposit> deposits = new ArrayList<>();
+    public static void main(String[] args) {
 
-    public static void readFromFile() {
-        File file = new File("resources/date.txt");
+        Random ran = new Random(151190);
 
-        try {
-            Scanner sc = new Scanner(file);
+        //Problem Parameters
+        int NoOfCustomers = 30;
+        int NoOfVehicles = 10;
+        int VehicleCap = 50;
 
-            locations = sc.nextInt();
-            cars = sc.nextInt();
-            capacity = sc.nextInt();
+        //Depot Coordinates
+        int Depot_x = 50;
+        int Depot_y = 50;
 
-            while (sc.hasNextLine()) {
-                Deposit currentDeposit;
-                int id = sc.nextInt();
-                int currentX = sc.nextInt();
-                int currentY = sc.nextInt();
-                int currentRequires = sc.nextInt();
-                currentDeposit = new Deposit(id, currentX, currentY, currentRequires);
-                deposits.add(currentDeposit);
-            }
-            sc.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+        //Tabu Parameter
+        int TABU_Horizon = 10;
+
+        //Initialise
+        //Create Random Customers
+        Node[] Nodes = new Node[NoOfCustomers + 1];
+        Node depot = new Node(Depot_x, Depot_y);
+
+        Nodes[0] = depot;
+        for (int i = 1; i <= NoOfCustomers; i++) {
+            Nodes[i] = new Node(i, //Id ) is reserved for depot
+                    ran.nextInt(100), //Random Cordinates
+                    ran.nextInt(100),
+                    4 + ran.nextInt(7)  //Random Demand
+            );
         }
-    }
 
-    private static float distance(int firstCordX, int firstCordY, int secondCordX, int secondCordY) {
-        return (float) Math.sqrt((secondCordX - firstCordX) * (secondCordX - firstCordX) - ((secondCordY - firstCordY) * (secondCordY - firstCordY)));
+        double[][] distanceMatrix = new double[NoOfCustomers + 1][NoOfCustomers + 1];
+        double Delta_x, Delta_y;
+        for (int i = 0; i <= NoOfCustomers; i++) {
+            for (int j = i + 1; j <= NoOfCustomers; j++) //The table is summetric to the first diagonal
+            {                                      //Use this to compute distances in O(n/2)
 
-    }
+                Delta_x = (Nodes[i].Node_X - Nodes[j].Node_X);
+                Delta_y = (Nodes[i].Node_Y - Nodes[j].Node_Y);
 
-    private static ArrayList<Deposit> sortArrayList(int currentCordX, int currentCordY, ArrayList<Deposit> freeDeposits) {
+                double distance = Math.sqrt((Delta_x * Delta_x) + (Delta_y * Delta_y));
 
-        //TO DO
-        return freeDeposits;
+                distance = Math.round(distance);                //Distance is Casted in Integer
+                //distance = Math.round(distance*100.0)/100.0; //Distance in double
 
-    }
+                distanceMatrix[i][j] = distance;
+                distanceMatrix[j][i] = distance;
+            }
+        }
+        int printMatrix = 0; //If we want to print diastance matrix
 
-    private static void findPath() {
-        ArrayList<Deposit> freeDeposits = new ArrayList<>(deposits);
-        int totalRoutesDistance = 0;
-        for (int i = 0; i < cars; i++) {
-            //sortez pentru fiecare masina vectorul de depozite ramase in functie de distanta de la depozitul actual la depozitele ramase
-            freeDeposits = sortArrayList(0, 0, freeDeposits);
-
-            int currentCapacity = 0;
-            int totalDistance = 0;
-            ArrayList<Integer> route = new ArrayList<>();
-
-            //parcurg cu un for vectorul sortat
-            for (int j = 0; j < freeDeposits.size(); j++) {
-                //pana cand gasesc un depozit a carui cantitate ceruta + cantitatea de pana cum nu depaseste capacitatea masinii
-                if (currentCapacity + freeDeposits.get(j).getRequires() < capacity) {
-                    route.add(freeDeposits.get(j).getId());
-                    freeDeposits.remove(freeDeposits.get(j));
-                    //TO DO : de adaugat si distanta de la nodul curent la urmatorul depozit
+        if (printMatrix == 1){
+            for (int i = 0; i <= NoOfCustomers; i++) {
+                for (int j = 0; j <= NoOfCustomers; j++) {
+                    System.out.print(distanceMatrix[i][j] + "  ");
                 }
+                System.out.println();
             }
-
-            //la urma printez pentru masina actuala traseul;
-            System.out.print("For cars no: " + i + " the route is: ");
-            for (Integer r : route) {
-                System.out.print(" -> " + r);
-            }
-            System.out.println("Distance of route: " + totalDistance);
-            System.out.println("Total distance of all routes: " + totalRoutesDistance);
         }
+
+        //Compute the greedy Solution
+        System.out.println("Attempting to resolve Vehicle Routing Problem (VRP) for "+NoOfCustomers+
+                " Customers and "+NoOfVehicles+" Vehicles"+" with "+VehicleCap + " units of capacity\n");
+
+        Solution s = new Solution(NoOfCustomers, NoOfVehicles, VehicleCap);
+
+        s.GreedySolution(Nodes, distanceMatrix);
+
+        s.SolutionPrint("Greedy Solution");
+
+        Draw.drawRoutes(s, "Greedy_Solution");
+
+        s.IntraRouteLocalSearch(Nodes, distanceMatrix);
+
+        s.SolutionPrint("Solution after Intra-Route Heuristic Neighborhood Search");
+
+        Draw.drawRoutes(s, "Intra-Route");
+
+        s.GreedySolution(Nodes, distanceMatrix);
+
+        s.InterRouteLocalSearch(Nodes, distanceMatrix);
+
+        s.SolutionPrint("Solution after Inter-Route Heuristic Neighborhood Search");
+
+        Draw.drawRoutes(s, "Inter-Route");
+
+        s.GreedySolution(Nodes, distanceMatrix);
+
+        s.TabuSearch(TABU_Horizon, distanceMatrix);
+
+        s.SolutionPrint("Solution After Tabu Search");
+
+        Draw.drawRoutes(s, "TABU_Solution");
     }
-
-    public static void main(String args[]) {
-        readFromFile();
-        findPath();
-
-    }
-
 }
